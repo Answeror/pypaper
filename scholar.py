@@ -171,7 +171,7 @@ class ScholarParser():
 
             if tag.get('href').startswith('/scholar?q'):
                 self.article['url_ralted'] = self._path2url(tag.get('href'))
-                
+
 
     @staticmethod
     def _tag_checker(tag):
@@ -233,7 +233,7 @@ class ScholarParser130501(ScholarParser):
                 continue
 
             #print tag.name, tag.get('class')
-    
+
             if tag.name == 'div' and tag.get('class') == ['gs_ri']:
                 if tag.a:
                     self.article['title'] = ''.join(tag.a.findAll(text=True))
@@ -245,7 +245,7 @@ class ScholarParser130501(ScholarParser):
                         year = self.year_re.findall(tag.text)
                         self.article['year'] = year[0] if len(year) > 0 else None
                         self.article['author'] = gstag.text
-                        
+
                     #elif gstag.name == 'div' and gstag.get('class') == ['gs_rs']:
                     elif gstag.name == 'div' and gstag.get('class') == ['gs_fl']:
                         self._parse_links(gstag)
