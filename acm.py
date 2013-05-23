@@ -2,12 +2,19 @@
 # -*- coding: utf-8 -*-
 
 from pyquery import PyQuery as pq
+import yapbib.biblist as biblist
 
 
 class ACM(object):
 
     def __init__(self, id):
         self.id = id
+
+    @property
+    def title(self):
+        if not hasattr(self, 'b'):
+            self.b = self._full_bibtex()
+        return self.b.get_items()[0]['title']
 
     @staticmethod
     def from_url(url):
@@ -16,11 +23,37 @@ class ACM(object):
         assert len(words) == 2
         return ACM(id=words[1])
 
+        #import re
+        #try:
+            #content = urlread(url)
+            #return ACM(id=re.search(r"document.cookie = 'picked=' \+ '(\d+)'", content).group(1))
+        #except:
+            #print(url)
+            #return None
+
+    @staticmethod
+    def from_title(title):
+        from urllib import urlencode
+        url = 'http://dl.acm.org/results.cfm'
+        d = pq(urlread(url + '?' + urlencode({'query': title})))
+        return ACM.from_url(d('a.medium-text').eq(0).attr('href'))
+
+    @staticmethod
+    def from_bibtex(f):
+        b = biblist.BibList()
+        ret = b.import_bibtex(f)
+        assert ret
+        return [ACM.from_title(it['title']) for it in b.get_items()]
+
     def export_bibtex(self, f):
+        b = self._full_bibtex()
+        b.export_bibtex(f)
+
+    def _full_bibtex(self):
         b = self._original_bibtex()
         it = b.get_items()[0]
         it['abstract'] = self._abstract()
-        b.export_bibtex(f)
+        return b
 
     def _original_bibtex(self):
         TEMPLATE = 'http://dl.acm.org/exportformats.cfm?id=%s&expformat=bibtex&_cf_containerId=theformats_body&_cf_nodebug=true&_cf_nocache=true&_cf_clientid=142656B43EEEE8D6E34FC208DBFCC647&_cf_rc=3'
@@ -29,10 +62,9 @@ class ACM(object):
         content = d('pre').text()
         from StringIO import StringIO
         f = StringIO(content)
-        import yapbib.biblist as biblist
         b = biblist.BibList()
         ret = b.import_bibtex(f)
-        assert ret
+        assert ret, content
         return b
 
     def _abstract(self):
@@ -40,6 +72,25 @@ class ACM(object):
         url = TEMPLATE % self.id
         d = pq(urlread(url))
         return d.text()
+
+    def download_pdf(self):
+        TEMPLATE = 'http://dl.acm.org/ft_gateway.cfm?id=%s&ftid=723552&dwn=1&CFID=216938597&CFTOKEN=33552307'
+        url = TEMPLATE % self.id
+        content = urlread(url)
+        filename = escape(self.title) + '.pdf'
+        import os
+        if not os.path.exists(filename):
+            with open(filename, 'wb') as f:
+                f.write(content)
+
+
+def escape(name):
+    #import string
+    #valid_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
+    #return ''.join([ch if ch in valid_chars else ' ' for ch in name])
+    from gn import Gn
+    gn = Gn()
+    return gn(name)
 
 
 def urlread(url):
@@ -64,10 +115,54 @@ def from_clipboard():
     return data
 
 
-if __name__ == '__main__':
+def test_download():
+    bib = ACM.from_url('http://dl.acm.org/citation.cfm?id=1672308.1672326&coll=DL&dl=ACM&CFID=216938597&CFTOKEN=33552307')
+    bib.download_pdf()
+
+
+def test_from_url():
+    bib = ACM.from_url('http://dl.acm.org/citation.cfm?id=1672308.1672326&coll=DL&dl=ACM&CFID=216938597&CFTOKEN=33552307')
+    print(bib.id)
+
+
+def test_from_title():
+    bib = ACM.from_title('Applications of mobile activity recognition')
+    print(bib.id)
+
+
+def get_params():
     import sys
-    bib = ACM.from_url(sys.argv[1] if len(sys.argv) > 1 else from_clipboard())
+    return sys.argv[1] if len(sys.argv) > 1 else from_clipboard()
+
+
+def download_bibtex(arg):
+    bib = ACM.from_url(arg)
     #from StringIO import StringIO
     #f = StringIO()
     bib.export_bibtex('out.bib')
     #print(f.getvalue())
+
+
+def download_pdf(arg):
+    import time
+    bibs = ACM.from_bibtex(arg)
+    print('bibs loaded')
+    for bib in bibs:
+        for i in range(10):
+            try:
+                print(bib.title)
+                bib.download_pdf()
+                time.sleep(10)
+            except:
+                print('failed')
+            else:
+                print('done')
+                break
+
+
+if __name__ == '__main__':
+    arg = get_params()
+    if arg.endswith('.bib'):
+        download_pdf(arg)
+    else:
+        download_bibtex(arg)
