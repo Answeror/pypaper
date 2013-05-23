@@ -4,25 +4,10 @@ This module provides classes for querying Google Scholar and parsing
 returned results.  It currently *only* processes the first results
 page.  It is not a recursive crawler.
 """
-# Version: 1.5 -- $Date: 2012-09-27 10:44:39 -0700 (Thu, 27 Sep 2012) $
+# Version: 1.3 -- $Date: 2012-02-01 16:51:16 -0800 (Wed, 01 Feb 2012) $
 #
 # ChangeLog
 # ---------
-#
-# 1.5:  A few changes:
-#
-#       - Tweak suggested by Tobias Isenberg: use unicode during CSV
-#         formatting.
-#
-#       - The option -c|--count now understands numbers up to 100 as
-#         well. Likewise suggested by Tobias.
-#
-#       - By default, text rendering mode is now active. This avoids
-#         confusion when playing with the script, as it used to report
-#         nothing when the user didn't select an explicit output mode.
-#
-# 1.4:  Updates to reflect changes in Scholar's page rendering,
-#       contributed by Amanda Hay at Tufts -- thanks!
 #
 # 1.3:  Updates to reflect changes in Scholar's page rendering.
 #
@@ -64,6 +49,7 @@ import sys
 import re
 import urllib
 import urllib2
+import bs4
 from bs4 import BeautifulSoup
 
 class Article():
@@ -111,7 +97,7 @@ class Article():
         res = []
         if header:
             res.append(sep.join(keys))
-        res.append(sep.join([unicode(self.attrs[key][0]) for key in keys]))
+        res.append(sep.join([str(self.attrs[key][0]) for key in keys]))
         return '\n'.join(res)
 
 class ScholarParser():
@@ -138,6 +124,7 @@ class ScholarParser():
         This method initiates parsing of HTML content.
         """
         self.soup = BeautifulSoup(html)
+        divs = self.soup.findAll(ScholarParser._tag_checker)
         for div in self.soup.findAll(ScholarParser._tag_checker):
             self._parse_article(div)
 
@@ -182,9 +169,13 @@ class ScholarParser():
                         self._as_int(tag.string.split()[1])
                 self.article['url_versions'] = self._path2url(tag.get('href'))
 
+            if tag.get('href').startswith('/scholar?q'):
+                self.article['url_ralted'] = self._path2url(tag.get('href'))
+                
+
     @staticmethod
     def _tag_checker(tag):
-        if tag.name == 'div' and tag.get('class') == 'gs_r':
+        if tag.name == 'div' and tag.get('class') == ['gs_r']:
             return True
         return False
 
@@ -228,10 +219,10 @@ class ScholarParser120201(ScholarParser):
         if self.article['title']:
             self.handle_article(self.article)
 
-class ScholarParser120726(ScholarParser):
+class ScholarParser130501(ScholarParser):
     """
     This class reflects update to the Scholar results page layout that
-    Google made 07/26/12.
+    Google made 05/01/2013.
     """
 
     def _parse_article(self, div):
@@ -241,21 +232,26 @@ class ScholarParser120726(ScholarParser):
             if not hasattr(tag, 'name'):
                 continue
 
-            if tag.name == 'div' and tag.get('class') == 'gs_ri':
-              if tag.a:
-                self.article['title'] = ''.join(tag.a.findAll(text=True))
-                self.article['url'] = self._path2url(tag.a['href'])
+            #print tag.name, tag.get('class')
+    
+            if tag.name == 'div' and tag.get('class') == ['gs_ri']:
+                if tag.a:
+                    self.article['title'] = ''.join(tag.a.findAll(text=True))
+                    self.article['url'] = self._path2url(tag.a['href'])
+                    #print self.article['title']
 
-              if tag.find('div', {'class': 'gs_a'}):
-                year = self.year_re.findall(tag.find('div', {'class': 'gs_a'}).text)
-                self.article['year'] = year[0] if len(year) > 0 else None
-
-              if tag.find('div', {'class': 'gs_fl'}):
-                self._parse_links(tag.find('div', {'class': 'gs_fl'}))
+                for gstag in tag:
+                    if gstag.name == 'div' and gstag.get('class') == ['gs_a']:
+                        year = self.year_re.findall(tag.text)
+                        self.article['year'] = year[0] if len(year) > 0 else None
+                        self.article['author'] = gstag.text
+                        
+                    #elif gstag.name == 'div' and gstag.get('class') == ['gs_rs']:
+                    elif gstag.name == 'div' and gstag.get('class') == ['gs_fl']:
+                        self._parse_links(gstag)
 
         if self.article['title']:
             self.handle_article(self.article)
-
 
 class ScholarQuerier():
     """
@@ -274,7 +270,7 @@ class ScholarQuerier():
 
     UA = 'Mozilla/5.0 (X11; U; FreeBSD i386; en-US; rv:1.9.2.9) Gecko/20100913 Firefox/3.6.9'
 
-    class Parser(ScholarParser120726):
+    class Parser(ScholarParser130501):
         def __init__(self, querier):
             ScholarParser.__init__(self)
             self.querier = querier
@@ -282,19 +278,13 @@ class ScholarQuerier():
         def handle_article(self, art):
             self.querier.add_article(art)
 
-    def __init__(self, author='', scholar_url=None, count=0):
+    def __init__(self, author='', scholar_url=None):
         self.articles = []
         self.author = author
-        # Clip to 100, as Google doesn't support more anyway
-        self.count = min(count, 100)
-
         if author == '':
             self.scholar_url = self.NOAUTH_URL
         else:
             self.scholar_url = scholar_url or self.SCHOLAR_URL
-
-        if self.count != 0:
-            self.scholar_url += '&num=%d' % self.count
 
     def query(self, search):
         """
@@ -321,7 +311,7 @@ class ScholarQuerier():
 
 
 def txt(query, author, count):
-    querier = ScholarQuerier(author=author, count=count)
+    querier = ScholarQuerier(author=author)
     querier.query(query)
     articles = querier.articles
     if count > 0:
@@ -330,7 +320,7 @@ def txt(query, author, count):
         print art.as_txt() + '\n'
 
 def csv(query, author, count, header=False, sep='|'):
-    querier = ScholarQuerier(author=author, count=count)
+    querier = ScholarQuerier(author=author)
     querier.query(query)
     articles = querier.articles
     if count > 0:
@@ -386,9 +376,9 @@ A command-line interface to Google Scholar."""
 
     if options.csv:
         csv(query, author=options.author, count=options.count)
-    elif options.csv_header:
+    if options.csv_header:
         csv(query, author=options.author, count=options.count, header=True)
-    else:
+    if options.txt:
         txt(query, author=options.author, count=options.count)
 
 if __name__ == "__main__":
