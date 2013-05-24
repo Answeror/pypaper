@@ -3,28 +3,49 @@
 
 import os
 import subprocess as sp
+import logging
 from conf import conf
 
 
-BASE_SOCKS_PORT = 9050
-BASE_CONTROL_PORT = 8118
 ROOT = os.path.dirname(__file__)
 TOR_PATH = os.path.join(ROOT, 'tor', 'tor.exe')
 
 
 class Tor(object):
 
-    def __init__(self, channel_count):
-        assert channel_count < 1024
-        self.channel_count = channel_count
-        _prepare_dir(channel_count)
+    def __init__(
+        self,
+        root=conf.tor_data_path,
+        socks_port=conf.tor_base_socks_port,
+        control_port=conf.tor_base_control_port
+    ):
+        self._root = root
+        self.socks_port = socks_port
+        self.control_port = control_port
+
+    @property
+    def root(self):
+        _try_makedirs(self._root)
+        return self._root
+
+    @property
+    def datapath(self):
+        d = os.path.join(self.root, 'data')
+        _try_makedirs(d)
+        return d
+
+    @property
+    def outpath(self):
+        return os.path.join(self.root, 'out')
+
+    @property
+    def pidpath(self):
+        return os.path.join(self.root, 'tor.pid')
 
     def run(self):
-        for i in range(self.channel_count):
-            socks_port = BASE_SOCKS_PORT + i
-            control_port = BASE_CONTROL_PORT + i
-            f = open(os.path.join(conf.tor_data_path, '%d.out' % i), 'wb')
-            sp.Popen([
+        try:
+            self.f = open(self.outpath, 'wb')
+            self.p = sp.Popen([
                 TOR_PATH,
                 '--RunAsDaemon',
                 '1',
@@ -33,14 +54,30 @@ class Tor(object):
                 '--HashedControlPassword',
                 '',
                 '--ControlPort',
-                str(control_port),
+                str(self.control_port),
                 '--PidFile',
-                os.path.join(conf.tor_data_path, '%d.pid' % i),
+                self.pidpath,
                 '--SocksPort',
-                str(socks_port),
+                str(self.socks_port),
                 '--DataDirectory',
-                _tor_data_path(i)
-            ], stdout=f, stderr=f)
+                self.datapath
+            ], stdout=self.f, stderr=self.f)
+        except Exception as e:
+            logging.exception(e)
+            self.stop()
+            raise
+
+    def stop(self):
+        if _notnone(self, 'f'):
+            self.f.close()
+            self.f = None
+        if _notnone(self, 'p'):
+            self.p.kill()
+            self.p = None
+
+
+def _notnone(self, name):
+    return hasattr(self, name) and not getattr(self, name) is None
 
 
 def _tor_data_path(i):
@@ -63,6 +100,7 @@ def _try_makedirs(path):
 
 
 if __name__ == '__main__':
-    tor = Tor(2)
+    tor = Tor()
     tor.run()
     raw_input('press')
+    tor.stop()
