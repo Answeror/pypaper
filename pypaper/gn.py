@@ -7,6 +7,8 @@ from config import Config
 
 
 def rep(s, subs=[]):
+    if not s:
+        return s
     head, tail = os.path.splitext(s)
     subed = head
     for pattern, replace in subs:
