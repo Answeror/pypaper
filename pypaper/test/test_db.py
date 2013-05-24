@@ -40,7 +40,7 @@ class Test(object):
         ]
         parent.references.extend(children)
         con = self.repo.session()
-        con.add([parent] + children)
+        con.add(parent, *children)
         con.commit()
         con = self.repo.session()
         assert_equal(len(con.articles), 3)
