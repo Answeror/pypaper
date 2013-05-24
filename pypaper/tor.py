@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import time
 import subprocess as sp
 import logging
 from conf import conf
@@ -42,7 +43,7 @@ class Tor(object):
     def pidpath(self):
         return os.path.join(self.root, 'tor.pid')
 
-    def run(self):
+    def run(self, block=False):
         try:
             self.f = open(self.outpath, 'wb')
             self.p = sp.Popen([
@@ -62,6 +63,17 @@ class Tor(object):
                 '--DataDirectory',
                 self.datapath
             ], stdout=self.f, stderr=self.f)
+            if not block:
+                return True
+            else:
+                for i in range(10):
+                    if read_output(self.root)[-2:] == [
+                        'Opening Socks listener on 127.0.0.1:%d' % self.socks_port,
+                        'Opening Control listener on 127.0.0.1:%d' % self.control_port
+                    ]:
+                        return True
+                    time.sleep(3)
+                return False
         except Exception as e:
             logging.exception(e)
             self.stop()
@@ -97,6 +109,18 @@ def _prepare_root_dir():
 def _try_makedirs(path):
     if not os.path.exists(path):
         os.makedirs(path)
+
+
+def read_output(root):
+    with open(os.path.join(root, 'out'), 'r') as f:
+        return [trim(line.decode('utf-8')) for line in f]
+
+
+def trim(s):
+    import re
+    ret = re.search(r'.*\[\w+\] (.*)', s)
+    assert ret
+    return ret.group(1).strip()
 
 
 if __name__ == '__main__':

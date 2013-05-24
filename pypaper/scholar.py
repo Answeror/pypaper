@@ -286,6 +286,9 @@ class ScholarQuerier():
         else:
             self.scholar_url = scholar_url or self.SCHOLAR_URL
 
+        from .opener import Opener
+        self.opener = Opener()
+
     def query(self, search):
         """
         This method initiates a query with subsequent parsing of the
@@ -294,7 +297,8 @@ class ScholarQuerier():
         url = self.scholar_url % {'query': urllib.quote(search.encode('utf-8')), 'author': urllib.quote(self.author)}
         req = urllib2.Request(url=url,
                               headers={'User-Agent': self.UA})
-        hdl = urllib2.urlopen(req)
+        #hdl = urllib2.urlopen(req)
+        hdl = self.opener.open(req)
         html = hdl.read()
         self.parse(html)
 

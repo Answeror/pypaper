@@ -12,9 +12,7 @@ def test_single():
     root = tempfile.mkdtemp()
     try:
         t = tor.Tor(root=root)
-        t.run()
-        import time
-        time.sleep(10)
+        t.run(block=True)
         t.stop()
         #assert_false(pid_exists(read_pid(root)))
         assert_equal(
