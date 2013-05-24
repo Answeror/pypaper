@@ -7,7 +7,7 @@ sys.path.append(os.getcwd())
 
 
 from pypaper import log
-from pypaper.google import Paper
+from pypaper.google import Archive
 
 
 def from_clipboard():
@@ -25,7 +25,9 @@ def get_params():
 if __name__ == '__main__':
     log.init('temp/bib.log', stdout=True)
     arg = get_params()
-    ps = Paper.from_bibtex_file(arg)
+    arc = Archive('temp/all.db')
+    arc.import_bibtex(arg)
+    ps = arc.articles
     from operator import attrgetter as attr
     ps = sorted(ps, key=attr('citation_count'), reverse=True)
     for i, p in zip(range(65536), ps):

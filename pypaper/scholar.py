@@ -171,6 +171,10 @@ class ScholarParser():
 
             if tag.get('href').startswith('/scholar?q'):
                 self.article['url_ralted'] = self._path2url(tag.get('href'))
+                self.article['id'] = _parse_id_from_related(tag.get('href'))
+
+            if tag.get('href') == '#' and not self.article['id']:
+                self.article['id'] = _parse_id_from_cite(tag.get('onclick'))
 
 
     @staticmethod
@@ -191,6 +195,21 @@ class ScholarParser():
         if not path.startswith('/'):
             path = '/' + path
         return self.site + path
+
+
+def _parse_id_from_related(s):
+    import re
+    ret = re.search(r'related:([\w_-]+):', s)
+    assert ret is not None, s
+    return ret.group(1)
+
+
+def _parse_id_from_cite(s):
+    import re
+    ret = re.search(r"return gs_ocit\(event,'([\w_-]+)'\)", s)
+    assert ret is not None, s
+    return ret.group(1)
+
 
 class ScholarParser120201(ScholarParser):
     """
@@ -311,6 +330,9 @@ class ScholarQuerier():
 
     def add_article(self, art):
         self.articles.append(art)
+
+    def reset(self):
+        self.articles = []
 
 
 

@@ -23,7 +23,12 @@ class Article(Base):
 
     id = Column(String, primary_key=True)
     title = Column(String)
-    citation_count = Column(Integer)
+    gn = Column(String)
+    year = Column(String, default=None)
+    author = Column(String, default=None)
+    url = Column(String, default=None)
+    citation_count = Column(Integer, default=0)
+    version_count = Column(Integer, default=1)
     references = relationship(
         'Article',
         secondary=citation_table,
@@ -31,10 +36,35 @@ class Article(Base):
         secondaryjoin=id == citation_table.c.child_id
     )
 
-    def __init__(self, id, title, citation_count):
+    def __init__(
+        self,
+        id,
+        title,
+        year=None,
+        author=None,
+        url=None,
+        citation_count=None,
+        version_count=None,
+        citation_url=None,
+        version_url=None,
+        related_url=None
+    ):
         self.id = id
         self.title = title
-        self.citation_count = citation_count
+        from gn import gn
+        self.gn = gn(self.title)
+        for name in (
+            'year',
+            'author',
+            'url',
+            'citation_count',
+            'version_count',
+            'citation_url',
+            'version_url',
+            'related_url'
+        ):
+            if locals()[name] is not None:
+                setattr(self, name, locals()[name])
 
 
 class Repo(object):
@@ -69,3 +99,15 @@ class Session(object):
 
     def article_by_id(self, id):
         return self.impl.query(Article).filter(Article.id == id).first()
+
+    def has_id(self, id):
+        return self.impl.query(Article).filter(Article.id == id).first() is not None
+
+    def has_title(self, title):
+        return self.impl.query(Article).filter(Article.title == title).first() is not None
+
+    def has_prob(self, gn, year=None):
+        q = self.impl.query(Article).filter(Article.gn == gn)
+        if year is not None:
+            q = q.filter(Article.year == year)
+        return q.first() is not None

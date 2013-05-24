@@ -79,6 +79,8 @@ class Tor(object):
 
     @property
     def running(self):
+        if not os.path.exists(output_path(self.root)):
+            return False
         return read_output(self.root)[-2:] == [
             'Opening Socks listener on 127.0.0.1:%d' % self.socks_port,
             'Opening Control listener on 127.0.0.1:%d' % self.control_port
@@ -93,7 +95,10 @@ class Tor(object):
         if _notnone(self, 'f'):
             self.f.close()
             self.f = None
-        os.remove(output_path(self.root))
+        try:
+            os.remove(output_path(self.root))
+        except:
+            pass
 
 
 def win_kill(pid):

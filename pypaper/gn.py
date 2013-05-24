@@ -27,3 +27,6 @@ class Gn(object):
 
     def __call__(self, name):
         return reppath(name, self.conf.subs)
+
+
+gn = Gn()

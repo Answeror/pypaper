@@ -5,7 +5,7 @@ from .tor import Tor
 from .socksipyhandler import SocksiPyHandler
 from . import socks
 import urllib2
-from urllib2 import HTTPError
+from urllib2 import HTTPError, URLError
 import logging
 import time
 
@@ -23,7 +23,6 @@ class Opener(object):
 
     def __del__(self):
         self.tor.stop()
-        super(Opener, self).__del__()
 
     def _run_tor(self):
         if not self.tor.running:
@@ -33,9 +32,9 @@ class Opener(object):
     def open(self, *args, **kargs):
         start_time = time.time()
         self._run_tor()
-        assert self.tor.running
         while True:
             try:
+                assert self.tor.running
                 return self.impl.open(*args, **kargs)
             except HTTPError as e:
                 elapsed = time.time() - start_time
@@ -43,6 +42,9 @@ class Opener(object):
                     logging.info('use %f seconds, timeout' % elapsed)
                     raise
                 logging.info('http %d, change tor' % e.code)
+                self._change_tor()
+            except URLError as e:
+                logging.info('url error, change tor')
                 self._change_tor()
         assert False
 

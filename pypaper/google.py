@@ -3,43 +3,113 @@
 
 import logging
 import yapbib.biblist as biblist
-from cache import cached
-from urllib2 import HTTPError
 from scholar import ScholarQuerier
+from . import db
 
 
 q = ScholarQuerier()
 
 
-class Paper(object):
+COMMON_FIELDS = (
+    'id',
+    'title',
+    'year',
+    'author',
+    'url',
+    'citation_count',
+    'version_count',
+    'citation_url',
+    'version_url',
+    'related_url'
+)
+
+
+class Article(object):
 
     @staticmethod
-    @cached
-    def from_title(title):
+    def from_db(d):
+        a = Article()
+        for name in COMMON_FIELDS:
+            setattr(a, name, getattr(d, name))
+        return a
+
+    def to_db(self, a):
+        return db.Article(**{name: getattr(a, name) for name in COMMON_FIELDS})
+
+    @property
+    def valid(self):
+        return hasattr(self, 'id') and self.id and hasattr(self, 'title') and self.title
+
+    @property
+    def gn(self):
+        from gn import gn
+        assert hasattr(self, 'title') and self.title
+        return gn(_em(self.title))
+
+    @staticmethod
+    def from_dict(d):
+        a = Article()
+        for key, value in d.items():
+            setattr(a, key, value)
+        return a
+
+    def google_update(self):
+        logging.info('dealing "%s"' % self.title)
         try:
-            q.query(title)
+            q.reset()
+            q.query(self.title)
             if not q.articles:
                 return None
-            art = q.articles[0]
-            p = Paper()
-            p.title = art['title']
-            p.citation_count = art['num_citations']
-            p.url = art['url']
-            p.version_count = art['num_versions']
-            p.citation_url = art['url_citations']
-            p.version_url = art['url_versions']
-            p.year = art['year']
-            return p
-        except HTTPError as e:
-            logging.debug('http %d, title: %s' % (e.code, title))
+            art = self._select_best(q.articles)
+            for key, value in (
+                ('id', art['id']),
+                ('title', art['title']),
+                ('citation_count', art['num_citations']),
+                ('url', art['url']),
+                ('author', art['author']),
+                ('version_count', art['num_versions']),
+                ('citation_url', art['url_citations']),
+                ('version_url', art['url_versions']),
+                ('related_url', art['url_ralted']),
+                ('year', art['year'])
+            ):
+                self._try_update(key, value)
+        except (KeyboardInterrupt, SystemExit):
             raise
         except Exception as e:
-            logging.debug('title: %s' % title)
+            logging.info('crawl "%s" failed' % self.title)
             logging.exception(e)
-            raise
+            return False
+        else:
+            logging.info('crawl "%s" done' % self.title)
+            return True
 
-    @staticmethod
-    def from_bibtex_file(f):
+    def _try_update(self, key, value):
+        if not hasattr(self, key) or value is not None:
+            setattr(self, key, value)
+
+    def _select_best(self, articles):
+        from gn import gn
+        from lcs import lcs
+        return min(articles, key=lambda art: lcs(self.gn, gn(_em(art['title']))))
+
+
+def _em(s):
+    return '' if s is None else s
+
+
+class Archive(object):
+
+    def __init__(self, path, interval=30):
+        self.repo = db.Repo(path)
+        self.interval = interval
+
+    @property
+    def articles(self):
+        con = self.repo.session()
+        return [Article.from_db(a) for a in con.articles]
+
+    def import_bibtex(self, f):
         b = biblist.BibList()
         ret = b.import_bibtex(f)
         if not ret:
@@ -50,44 +120,45 @@ class Paper(object):
                 content = f
             logging.debug('parse bibtex failed:%s' % content)
             return []
-        res = []
         for it in b.get_items():
             try:
-                p = Paper.from_title(it['title'])
-            except HTTPError:
-                pass
-            else:
-                logging.info('crawl %s done' % it['title'])
-                res.append(p)
-            pause()
-        return res
+                a = Article.from_dict(it)
+                if self.has_prob(gn=a.gn, year=a.year):
+                    logging.info('"%s" already in database' % a.title)
+                else:
+                    if a.google_update():
+                        if not a.valid:
+                            logging.info('invalid article: "%s"' % a.title)
+                        else:
+                            if self.has(id=a.id):
+                                logging.info('%s already in database' % a.id)
+                            else:
+                                self._add_article(a)
+                    self._pause()
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception as e:
+                logging.debug('failed on "%s"' % _em(it['title']))
+                logging.exception(e)
 
+    def has(self, id):
+        con = self.repo.session()
+        return con.has_id(id)
 
-def pause(interval=10):
-    import time
-    import random
-    time.sleep(interval + (random.random() - 0.5) * interval / 2.0)
+    def has_title(self, title):
+        con = self.repo.session()
+        return con.has_title(title)
 
+    def has_prob(self, gn, year=None):
+        con = self.repo.session()
+        return con.has_prob(gn, year)
 
-def from_clipboard():
-    import win32clipboard
-    win32clipboard.OpenClipboard()
-    data = win32clipboard.GetClipboardData()
-    win32clipboard.CloseClipboard()
-    return data
+    def _add_article(self, a):
+        con = self.repo.session()
+        con.add(a.to_db(a))
+        con.commit()
 
-
-def get_params():
-    import sys
-    return sys.argv[1] if len(sys.argv) > 1 else from_clipboard()
-
-
-if __name__ == '__main__':
-    import log
-    log.init('temp/bib.log', stdout=True)
-    arg = get_params()
-    ps = Paper.from_bibtex_file(arg)
-    from operator import attrgetter as attr
-    ps = sorted(ps, key=attr('citation_count'), reverse=True)
-    for i, p in zip(range(65536), ps):
-        print('%d\t%s' % (p.citation_count, p.title[:74]))
+    def _pause(self):
+        import time
+        import random
+        time.sleep(self.interval + (random.random() - 0.5) * self.interval / 2.0)
