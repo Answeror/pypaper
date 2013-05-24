@@ -5,6 +5,7 @@ import os
 import time
 import subprocess as sp
 import logging
+import shutil
 from conf import conf
 
 
@@ -64,13 +65,10 @@ class Tor(object):
                 self.datapath
             ], stdout=self.f, stderr=self.f)
             if not block:
-                return True
+                return self.running
             else:
                 for i in range(10):
-                    if read_output(self.root)[-2:] == [
-                        'Opening Socks listener on 127.0.0.1:%d' % self.socks_port,
-                        'Opening Control listener on 127.0.0.1:%d' % self.control_port
-                    ]:
+                    if self.running:
                         return True
                     time.sleep(3)
                 return False
@@ -79,13 +77,41 @@ class Tor(object):
             self.stop()
             raise
 
+    @property
+    def running(self):
+        return read_output(self.root)[-2:] == [
+            'Opening Socks listener on 127.0.0.1:%d' % self.socks_port,
+            'Opening Control listener on 127.0.0.1:%d' % self.control_port
+        ]
+
     def stop(self):
+        if _notnone(self, 'p'):
+            self.p.kill()
+            win_kill(self.p.pid)
+            del self.p
+            self.p = None
         if _notnone(self, 'f'):
             self.f.close()
             self.f = None
-        if _notnone(self, 'p'):
-            self.p.kill()
-            self.p = None
+        os.remove(output_path(self.root))
+
+
+def win_kill(pid):
+    '''kill a process by specified PID in windows'''
+    import win32api
+    import win32con
+
+    hProc = None
+    try:
+        hProc = win32api.OpenProcess(win32con.PROCESS_TERMINATE, 0, pid)
+        win32api.TerminateProcess(hProc, 0)
+    except Exception:
+        return False
+    finally:
+        if hProc is not None:
+            hProc.Close()
+
+    return True
 
 
 def _notnone(self, name):
@@ -111,9 +137,16 @@ def _try_makedirs(path):
         os.makedirs(path)
 
 
+def output_path(root):
+    return os.path.join(root, 'out')
+
+
 def read_output(root):
-    with open(os.path.join(root, 'out'), 'r') as f:
-        return [trim(line.decode('utf-8')) for line in f]
+    try:
+        with open(output_path(root), 'r') as f:
+            return [trim(line.decode('utf-8')) for line in f]
+    except:
+        return []
 
 
 def trim(s):

@@ -5,6 +5,10 @@ import logging
 import yapbib.biblist as biblist
 from cache import cached
 from urllib2 import HTTPError
+from scholar import ScholarQuerier
+
+
+q = ScholarQuerier()
 
 
 class Paper(object):
@@ -13,8 +17,6 @@ class Paper(object):
     @cached
     def from_title(title):
         try:
-            from scholar import ScholarQuerier
-            q = ScholarQuerier()
             q.query(title)
             if not q.articles:
                 return None
@@ -55,6 +57,7 @@ class Paper(object):
             except HTTPError:
                 pass
             else:
+                logging.info('crawl %s done' % it['title'])
                 res.append(p)
             pause()
         return res
@@ -81,7 +84,7 @@ def get_params():
 
 if __name__ == '__main__':
     import log
-    log.init('bib.log', stdout=True)
+    log.init('temp/bib.log', stdout=True)
     arg = get_params()
     ps = Paper.from_bibtex_file(arg)
     from operator import attrgetter as attr
