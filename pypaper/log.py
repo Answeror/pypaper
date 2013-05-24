@@ -9,7 +9,7 @@ def init(path=os.path.expanduser('~/.bib.log'), stdout=False):
     LEVEL = logging.DEBUG
     logging.basicConfig(
         filename=path,
-        filemode='w',
+        filemode='a',
         format='%(asctime)s - %(levelname)s - %(message)s',
         level=LEVEL
     )
