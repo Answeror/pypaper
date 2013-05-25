@@ -30,8 +30,17 @@ class Article(object):
     def from_db(d):
         a = Article()
         for name in COMMON_FIELDS:
+            assert hasattr(d, name), name
             setattr(a, name, getattr(d, name))
         return a
+
+    @property
+    def complete(self):
+        """Whether article has complete information."""
+        for key in COMMON_FIELDS:
+            if not hasattr(self, key) or getattr(self, key) is None:
+                return False
+        return True
 
     def to_db(self, a):
         return db.Article(**{name: getattr(a, name) for name in COMMON_FIELDS})
@@ -109,7 +118,16 @@ class Archive(object):
         con = self.repo.session()
         return [Article.from_db(a) for a in con.articles]
 
-    def import_bibtex(self, f):
+    def import_bibtex(self, f, complete=True):
+        def need_update(a):
+            if self.has_prob(gn=a.gn, year=a.year):
+                logging.info('"%s" already in database' % a.title)
+                if complete and not a.complete:
+                    logging.info('info not complete, update')
+                    return True
+                return False
+            return True
+
         b = biblist.BibList()
         ret = b.import_bibtex(f)
         if not ret:
@@ -123,9 +141,7 @@ class Archive(object):
         for it in b.get_items():
             try:
                 a = Article.from_dict(it)
-                if self.has_prob(gn=a.gn, year=a.year):
-                    logging.info('"%s" already in database' % a.title)
-                else:
+                if need_update(a):
                     if a.google_update():
                         if not a.valid:
                             logging.info('invalid article: "%s"' % a.title)

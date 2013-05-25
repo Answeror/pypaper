@@ -27,8 +27,11 @@ class Article(Base):
     year = Column(String, default=None)
     author = Column(String, default=None)
     url = Column(String, default=None)
-    citation_count = Column(Integer, default=0)
-    version_count = Column(Integer, default=1)
+    citation_count = Column(Integer, default=None)
+    version_count = Column(Integer, default=None)
+    citation_url = Column(String, default=None)
+    version_url = Column(String, default=None)
+    related_url = Column(String, default=None)
     references = relationship(
         'Article',
         secondary=citation_table,
