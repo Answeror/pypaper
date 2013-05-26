@@ -13,6 +13,8 @@ def rep(s, subs=[]):
     subed = head
     for pattern, replace in subs:
         subed = re.sub(pattern, replace, subed)
+    if not subed:
+        return subed
     trimed = re.search(r'\W*(.*\w)\W*', subed).group(1)
     return re.sub(r'\W+', '-', trimed.lower()) + tail.lower()
 

@@ -28,6 +28,8 @@ class Article(object):
 
     @staticmethod
     def from_db(d):
+        if d is None:
+            return None
         a = Article()
         for name in COMMON_FIELDS:
             assert hasattr(d, name), name
@@ -58,9 +60,12 @@ class Article(object):
     @staticmethod
     def from_dict(d):
         a = Article()
+        return a.import_dict(d)
+
+    def import_dict(self, d):
         for key, value in d.items():
-            setattr(a, key, value)
-        return a
+            setattr(self, key, value)
+        return self
 
     def google_update(self):
         logging.info('dealing "%s"' % self.title)
@@ -122,7 +127,12 @@ class Archive(object):
         def need_update(a):
             if self.has_prob(gn=a.gn, year=a.year):
                 logging.info('"%s" already in database' % a.title)
-                if complete and not a.complete:
+                articles = self.articles_prob(gn=a.gn, year=a.year)
+                assert articles
+                if len(articles) > 1:
+                    logging.info('gn "%s" not unique' % a.title)
+                    return False
+                if complete and not articles[0].complete:
                     logging.info('info not complete, update')
                     return True
                 return False
@@ -142,14 +152,16 @@ class Archive(object):
             try:
                 a = Article.from_dict(it)
                 if need_update(a):
+                    a = self.article_prob(gn=a.gn, year=a.year)
+                    if not a:
+                        a = Article.from_dict(it)
+                    else:
+                        a.import_dict(it)
                     if a.google_update():
                         if not a.valid:
                             logging.info('invalid article: "%s"' % a.title)
                         else:
-                            if self.has(id=a.id):
-                                logging.info('%s already in database' % a.id)
-                            else:
-                                self._add_article(a)
+                            self._add_or_update_article(a)
                     self._pause()
             except (KeyboardInterrupt, SystemExit):
                 raise
@@ -169,9 +181,22 @@ class Archive(object):
         con = self.repo.session()
         return con.has_prob(gn, year)
 
+    def articles_prob(self, gn, year=None):
+        con = self.repo.session()
+        return [Article.from_db(a) for a in con.articles_prob(gn, year)]
+
+    def article_prob(self, gn, year=None):
+        con = self.repo.session()
+        return Article.from_db(con.article_prob(gn, year))
+
     def _add_article(self, a):
         con = self.repo.session()
         con.add(a.to_db(a))
+        con.commit()
+
+    def _add_or_update_article(self, a):
+        con = self.repo.session()
+        con.add_or_update(a.to_db(a))
         con.commit()
 
     def _pause(self):

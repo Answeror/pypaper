@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from sqlalchemy import Column, Date, Integer, String, Table, ForeignKey
+from sqlalchemy import Column, Integer, String, Table, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, backref
+from sqlalchemy.orm import relationship
 
 
 Base = declarative_base()
@@ -93,6 +93,12 @@ class Session(object):
             assert type(arg) in [Article], type(arg)
         self.impl.add_all(args)
 
+    def add_or_update(self, *args):
+        for arg in args:
+            assert type(arg) in [Article], type(arg)
+            arg = self.impl.merge(arg)
+            self.impl.add(arg)
+
     @property
     def articles(self):
         return self.impl.query(Article).all()
@@ -110,7 +116,16 @@ class Session(object):
         return self.impl.query(Article).filter(Article.title == title).first() is not None
 
     def has_prob(self, gn, year=None):
+        return self.article_prob(gn=gn, year=year) is not None
+
+    def articles_prob(self, gn, year=None):
         q = self.impl.query(Article).filter(Article.gn == gn)
         if year is not None:
             q = q.filter(Article.year == year)
-        return q.first() is not None
+        return q.all()
+
+    def article_prob(self, gn, year=None):
+        q = self.impl.query(Article).filter(Article.gn == gn)
+        if year is not None:
+            q = q.filter(Article.year == year)
+        return q.first()
