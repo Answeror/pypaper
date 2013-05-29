@@ -127,5 +127,7 @@ class Session(object):
     def article_prob(self, gn, year=None):
         q = self.impl.query(Article).filter(Article.gn == gn)
         if year is not None:
-            q = q.filter(Article.year == year)
+            t = q.filter(Article.year == year)
+            if t.first() is not None:
+                q = t
         return q.first()

@@ -123,6 +123,19 @@ class Archive(object):
         con = self.repo.session()
         return [Article.from_db(a) for a in con.articles]
 
+    def _parse_bibtex(self, f):
+        b = biblist.BibList()
+        ret = b.import_bibtex(f)
+        if not ret:
+            try:
+                f.seek(0)
+                content = '\n' + f.read()
+            except:
+                content = f
+            logging.debug('parse bibtex failed:%s' % content)
+            return None
+        return b
+
     def import_bibtex(self, f, complete=True):
         def need_update(a):
             if self.has_prob(gn=a.gn, year=a.year):
@@ -138,16 +151,10 @@ class Archive(object):
                 return False
             return True
 
-        b = biblist.BibList()
-        ret = b.import_bibtex(f)
-        if not ret:
-            try:
-                f.seek(0)
-                content = '\n' + f.read()
-            except:
-                content = f
-            logging.debug('parse bibtex failed:%s' % content)
-            return []
+        b = self._parse_bibtex(f)
+        if not b:
+            return
+
         for it in b.get_items():
             try:
                 a = Article.from_dict(it)
@@ -203,3 +210,32 @@ class Archive(object):
         import time
         import random
         time.sleep(self.interval + (random.random() - 0.5) * self.interval / 2.0)
+
+    def query(self, **kargs):
+        if 'bibtex' in kargs:
+            return self._query_bi_bibtex(kargs['bibtex'])
+        else:
+            assert False, 'known arguments: %s' % str(kargs.keys())
+
+    def _query_bi_bibtex(self, bibtex):
+        b = self._parse_bibtex(bibtex)
+        if b is None:
+            return []
+
+        articles = []
+        for it in b.get_items():
+            try:
+                a = Article.from_dict(it)
+                a = self.article_prob(gn=a.gn, year=a.year)
+                if not a is None:
+                    a.import_dict(it)
+                    articles.append(a)
+                else:
+                    logging.info('cannot find "%s"' % _em(it['title']))
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception as e:
+                logging.debug('failed on "%s"' % _em(it['title']))
+                logging.exception(e)
+
+        return articles

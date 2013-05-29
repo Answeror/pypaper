@@ -6,10 +6,14 @@ import os
 from config import Config
 
 
-def rep(s, subs=[]):
+def rep(s, subs=[], filename=True):
     if not s:
         return s
-    head, tail = os.path.splitext(s)
+    if filename:
+        head, tail = os.path.splitext(s)
+    else:
+        head = s
+        tail = ''
     subed = head
     for pattern, replace in subs:
         subed = re.sub(pattern, replace, subed)
@@ -21,7 +25,7 @@ def rep(s, subs=[]):
 
 def reppath(path, subs=[]):
     parts = os.path.split(path)
-    return os.path.join(*(list(parts[:-1]) + [rep(parts[-1], subs)]))
+    return os.path.join(*(list(parts[:-1]) + [rep(parts[-1], subs, False)]))
 
 
 class Gn(object):
