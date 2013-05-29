@@ -228,7 +228,6 @@ class Archive(object):
                 a = Article.from_dict(it)
                 a = self.article_prob(gn=a.gn, year=a.year)
                 if not a is None:
-                    a.import_dict(it)
                     articles.append(a)
                 else:
                     logging.info('cannot find "%s"' % _em(it['title']))
