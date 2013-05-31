@@ -141,7 +141,8 @@ class Archive(object):
             if self.has_prob(gn=a.gn, year=a.year):
                 logging.info('"%s" already in database' % a.title)
                 articles = self.articles_prob(gn=a.gn, year=a.year)
-                assert articles
+                if not articles:
+                    return False
                 if len(articles) > 1:
                     logging.info('gn "%s" not unique' % a.title)
                     return False
