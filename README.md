@@ -15,7 +15,13 @@ The google scholar records of `example/review.bib` will be stored in `temp/googl
 
 # Dependency
 
-This project tested on Python `2.7`, under virtualenv. Following are `pip freeze` result:
+This project tested on
+
+```
+Python 2.7.1 (r271:86832, Nov 27 2010, 18:30:46) [MSC v.1500 32 bit (Intel)] on win32
+```
+
+, under virtualenv. Following are `pip freeze` result:
 
 ```
 SQLAlchemy==0.8.1
