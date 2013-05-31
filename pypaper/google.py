@@ -152,7 +152,7 @@ class Archive(object):
             return True
 
         b = self._parse_bibtex(f)
-        if not b:
+        if b is None:
             return
 
         for it in b.get_items():
@@ -209,7 +209,9 @@ class Archive(object):
     def _pause(self):
         import time
         import random
-        time.sleep(self.interval + (random.random() - 0.5) * self.interval / 2.0)
+        length = self.interval + (random.random() - 0.5) * self.interval / 2.0
+        logging.info('wait %f seconds' % length)
+        time.sleep(length)
 
     def query(self, **kargs):
         if 'bibtex' in kargs:

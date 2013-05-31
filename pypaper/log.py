@@ -16,5 +16,5 @@ def init(path=os.path.expanduser('~/.bib.log'), stdout=False):
     import sys
     if stdout:
         h = logging.StreamHandler(sys.stdout)
-        h.setLevel(LEVEL),
+        h.setLevel(logging.INFO),
         logging.getLogger().addHandler(h)
