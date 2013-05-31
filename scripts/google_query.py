@@ -48,5 +48,9 @@ if __name__ == '__main__':
     p.add_argument('-o', '--output', help='output file', default='out.txt')
     p.add_argument('-w', '--wait', help='interval between two query', default=30)
     args = p.parse_args()
+
+    if not os.path.exists(args.cache):
+        os.makedirs(args.cache)
+
     with open(args.output, 'wb') as f:
         deal(f, args.bibtex, args.cache, args.database, float(args.wait))

@@ -19,6 +19,9 @@ if __name__ == '__main__':
     p.add_argument('-w', '--wait', help='interval between two query', default=30)
     args = p.parse_args()
 
+    if not os.path.exists(args.cache):
+        os.makedirs(args.cache)
+
     log.init(os.path.join(args.cache, 'google.log'), stdout=True)
     arc = Archive(args.database, interval=float(args.wait))
     arc.import_bibtex(args.bibtex)
